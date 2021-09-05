@@ -83,6 +83,7 @@ class Fudan:
         }
 
         logging.debug("Login ing——")
+        logging.debug(data)
         post = self.session.post(
                 self.url_login,
                 data=data,
@@ -137,6 +138,10 @@ class Zlapp(Fudan):
 
         logging.info("上一次提交地址为: %s" % position['formattedAddress'])
         # logging.debug("上一次提交GPS为", position["position"])
+        self.last_info = last_info["d"]["info"]
+        self.old_info = last_info["d"]["oldInfo"]
+        self.u_info = last_info["d"]["uinfo"]
+        logging.debug(self.last_info)
 
         today = time.strftime("%Y%m%d", time.localtime())
 
@@ -145,7 +150,7 @@ class Zlapp(Fudan):
             self.close()
         else:
             logging.info("未提交")
-            self.last_info = last_info["d"]["info"]
+            # self.last_info = last_info["d"]["info"]
 
     def checkin(self):
         """
@@ -161,20 +166,23 @@ class Zlapp(Fudan):
 
         logging.debug("提交中")
 
-        geo_api_info = json_loads(self.last_info["geo_api_info"])
-        province = geo_api_info["addressComponent"].get("province", "")
-        city = geo_api_info["addressComponent"].get("city", "") or province
-        district = geo_api_info["addressComponent"].get("district", "")
+        # geo_api_info = json_loads(self.last_info["geo_api_info"])
+        # province = geo_api_info["addressComponent"].get("province", "")
+        # city = geo_api_info["addressComponent"].get("city", "") or province
+        # district = geo_api_info["addressComponent"].get("district", "")
         self.last_info.update(
                 {
                     "tw"      : "13",
-                    "province": province,
-                    "city"    : city,
-                    "area"    : " ".join(set((province, city, district))),
-                    "ismoved" : 0
+                    "province": self.old_info["province"],
+                    "city"    : self.old_info["city"],
+                    "area"    : self.old_info["area"],
+                    "ismoved" : 0,
+                    "realname": self.u_info["realname"],
+                    "number": self.u_info["role"]["number"],
+                    "now_time": int(round(time.time() * 1000))
                 }
         )
-        # logging.debug(self.last_info)
+        logging.debug(self.last_info)
 
         save = self.session.post(
                 'https://zlapp.fudan.edu.cn/ncov/wap/fudan/save',
