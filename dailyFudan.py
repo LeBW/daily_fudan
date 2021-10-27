@@ -179,7 +179,7 @@ class Zlapp(Fudan):
         while "验证码错误" in save_msg:
             logging.info("准备识别验证码")
             code = self.validate_code()
-            logging.info("识别验证码成功，验证码为: ", code)
+            logging.info("识别验证码成功，验证码为: %s", code)
 
             # geo_api_info = json_loads(self.last_info["geo_api_info"])
             # province = geo_api_info["addressComponent"].get("province", "")
