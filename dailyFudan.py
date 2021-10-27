@@ -6,7 +6,14 @@ from sys import argv as sys_argv
 
 from lxml import etree
 from requests import session
+from PIL import Image
 import logging
+import numpy
+import easyocr
+import io
+
+
+
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
@@ -20,7 +27,8 @@ class Fudan:
     # 初始化会话
     def __init__(self,
                  uid, psw,
-                 url_login='https://uis.fudan.edu.cn/authserver/login'):
+                 url_login='https://uis.fudan.edu.cn/authserver/login', 
+                 url_code='https://zlapp.fudan.edu.cn/backend/default/code'):
         """
         初始化一个session，及登录信息
         :param uid: 学号
@@ -30,6 +38,7 @@ class Fudan:
         self.session = session()
         self.session.headers['User-Agent'] = self.UA
         self.url_login = url_login
+        self.url_code = url_code
 
         self.uid = uid
         self.psw = psw
@@ -147,7 +156,7 @@ class Zlapp(Fudan):
 
         if last_info["d"]["info"]["date"] == today:
             logging.info("今日已提交")
-            self.close()
+            #self.close()
         else:
             logging.info("未提交")
             # self.last_info = last_info["d"]["info"]
@@ -166,32 +175,47 @@ class Zlapp(Fudan):
 
         logging.debug("提交中")
 
-        # geo_api_info = json_loads(self.last_info["geo_api_info"])
-        # province = geo_api_info["addressComponent"].get("province", "")
-        # city = geo_api_info["addressComponent"].get("city", "") or province
-        # district = geo_api_info["addressComponent"].get("district", "")
-        self.last_info.update(
-                {
-                    "tw"      : "13",
-                    "province": self.old_info["province"],
-                    "city"    : self.old_info["city"],
-                    "area"    : self.old_info["area"],
-                    "ismoved" : 0,
-                    "realname": self.u_info["realname"],
-                    "number": self.u_info["role"]["number"],
-                    "now_time": int(round(time.time() * 1000))
-                }
-        )
-        logging.debug(self.last_info)
+        save_msg = "验证码错误"
+        while "验证码错误" in save_msg:
+            logging.info("准备识别验证码")
+            code = self.validate_code()
+            logging.info("识别验证码成功，验证码为: ", code)
 
-        save = self.session.post(
-                'https://zlapp.fudan.edu.cn/ncov/wap/fudan/save',
-                data=self.last_info,
-                headers=headers,
-                allow_redirects=False)
+            # geo_api_info = json_loads(self.last_info["geo_api_info"])
+            # province = geo_api_info["addressComponent"].get("province", "")
+            # city = geo_api_info["addressComponent"].get("city", "") or province
+            # district = geo_api_info["addressComponent"].get("district", "")
+            self.last_info.update(
+                    {
+                        "tw"      : "13",
+                        "province": self.old_info["province"],
+                        "city"    : self.old_info["city"],
+                        "area"    : self.old_info["area"],
+                        "sfzx"    : self.old_info["sfzx"],
+                        "ismoved" : 0,
+                        "realname": self.u_info["realname"],
+                        "number"  : self.u_info["role"]["number"],
+                        "now_time": int(round(time.time() * 1000)),
+                        "code": code
+                    }
+            )
+            logging.info(self.last_info)
 
-        save_msg = json_loads(save.text)["m"]
-        logging.info(save_msg)
+            save = self.session.post(
+                    'https://zlapp.fudan.edu.cn/ncov/wap/fudan/save',
+                    data=self.last_info,
+                    headers=headers,
+                    allow_redirects=False)
+
+            save_msg = json_loads(save.text)["m"]
+            logging.info(save_msg)
+    
+    def validate_code(self):
+        img = self.session.get(self.url_code).content
+        image = numpy.array(Image.open(io.BytesIO(img)))
+        reader = easyocr.Reader(['en'])
+        result = reader.readtext(image, detail = 0)
+        return result[0]
 
 def get_account():
     """
