@@ -11,10 +11,13 @@ import logging
 import numpy
 import easyocr
 import io
+import ssl
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 
-logging.basicConfig(level=logging.INFO,
+logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
 
@@ -28,7 +31,8 @@ class Fudan:
     def __init__(self,
                  uid, psw,
                  url_login='https://uis.fudan.edu.cn/authserver/login', 
-                 url_code='https://zlapp.fudan.edu.cn/backend/default/code'):
+                 url_code='https://zlapp.fudan.edu.cn/backend/default/code',
+                 url_auth_captcha='https://uis.fudan.edu.cn/authserver/captcha.html'):
         """
         初始化一个session，及登录信息
         :param uid: 学号
@@ -39,6 +43,7 @@ class Fudan:
         self.session.headers['User-Agent'] = self.UA
         self.url_login = url_login
         self.url_code = url_code
+        self.url_auth_captcha = url_auth_captcha
 
         self.uid = uid
         self.psw = psw
@@ -59,6 +64,13 @@ class Fudan:
         else:
             logging.debug("Fail to open Login Page, Check your Internet connection\n")
             self.close()
+
+    def validate_code(self, url):
+        img = self.session.get(url).content
+        image = numpy.array(Image.open(io.BytesIO(img)))
+        reader = easyocr.Reader(['en'])
+        result = reader.readtext(image, detail = 0)
+        return result[0]
 
     def login(self):
         """
@@ -91,7 +103,7 @@ class Fudan:
             "User-Agent": self.UA
         }
 
-        logging.debug("Login ing——")
+        logging.debug("Logging in——")
         logging.debug(data)
         post = self.session.post(
                 self.url_login,
@@ -100,11 +112,27 @@ class Fudan:
                 allow_redirects=False)
 
         logging.debug("return status code %d" % post.status_code)
+        
+        retry = 10
+        while post.status_code != 302 and retry > 0:
+            logging.debug("登录失败，请检查账号信息 " + str(post.status_code))
+            if "验证码" in post.text:
+                logging.debug("验证码失败")
+                code = self.validate_code(self.url_auth_captcha)
+                data.update({"captchaResponse": code})
+                post = self.session.post(
+                        self.url_login,
+                        data=data,
+                        headers=headers,
+                        allow_redirects=False)
+
 
         if post.status_code == 302:
             logging.debug("登录成功")
         else:
             logging.debug("登录失败，请检查账号信息")
+            if post.text.contains("请输入验证码"):
+                code = self.validate_code(self.url_auth_captcha)
             self.close()
 
     def logout(self):
@@ -178,7 +206,7 @@ class Zlapp(Fudan):
         save_msg = "验证码错误"
         while "验证码错误" in save_msg:
             logging.info("准备识别验证码")
-            code = self.validate_code()
+            code = self.validate_code(self.url_code)
             logging.info("识别验证码成功，验证码为: %s", code)
 
             # geo_api_info = json_loads(self.last_info["geo_api_info"])
@@ -210,12 +238,7 @@ class Zlapp(Fudan):
             save_msg = json_loads(save.text)["m"]
             logging.info(save_msg)
     
-    def validate_code(self):
-        img = self.session.get(self.url_code).content
-        image = numpy.array(Image.open(io.BytesIO(img)))
-        reader = easyocr.Reader(['en'])
-        result = reader.readtext(image, detail = 0)
-        return result[0]
+
 
 def get_account():
     """
