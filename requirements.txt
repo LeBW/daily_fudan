@@ -1,3 +1,4 @@
-lxml
-requests
-easyocr
+lxml==4.7.1
+requests==2.26.0
+opencv-python-headless==4.5.4.60
+easyocr==1.4.1
