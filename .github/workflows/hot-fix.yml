@@ -1,7 +1,9 @@
 name: "Daily Fudan"
 
 on:
-  push
+  push:
+    branches:
+    - hot-fix
 
 env:
   # auto merge from y1ndan/genshin-impact-helper, default: false
