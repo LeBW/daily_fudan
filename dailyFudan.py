@@ -104,7 +104,7 @@ class Fudan:
         }
 
         logging.debug("Logging in——")
-        logging.debug(data)
+        # logging.debug(data)
         post = self.session.post(
                 self.url_login,
                 data=data,
